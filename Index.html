@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#a78bfa">
+<title>Голосовой Помощник</title>
+<link rel="manifest" href="manifest.json">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    min-height: 100vh;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: radial-gradient(circle at 20% 10%, #1a1a3e 0%, #0a0a1f 60%, #000 100%);
+    color: #e8e8ff;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 30px 16px;
+  }
+
+  h1 {
+    font-size: 1.8rem;
+    margin-bottom: 6px;
+    background: linear-gradient(90deg, #6ee7ff, #a78bfa, #f472b6);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .subtitle {
+    color: #8a8ab8;
+    font-size: 0.9rem;
+    margin-bottom: 30px;
+  }
+
+  .mic-wrapper { position: relative; margin-bottom: 30px; }
+
+  .mic-btn {
+    width: 130px;
+    height: 130px;
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+    background: linear-gradient(145deg, #6ee7ff, #a78bfa);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 3.2rem;
+    transition: transform 0.2s, box-shadow 0.3s;
+    box-shadow: 0 0 40px rgba(110, 231, 255, 0.4);
+    position: relative;
+    z-index: 2;
+  }
+
+  .mic-btn:hover { transform: scale(1.05); }
+  .mic-btn:active { transform: scale(0.96); }
+
+  .mic-btn.listening {
+    background: linear-gradient(145deg, #f472b6, #ef4444);
+    box-shadow: 0 0 60px rgba(244, 114, 182, 0.7);
+    animation: pulse 1.2s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 40px rgba(244, 114, 182, 0.6); }
+    50%      { box-shadow: 0 0 90px rgba(244, 114, 182, 1); }
+  }
+
+  .wave {
+    position: absolute;
+    inset: -20px;
+    border-radius: 50%;
+    border: 2px solid rgba(110, 231, 255, 0.5);
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .listening + .wave { animation: ripple 1.6s infinite; }
+  .listening + .wave:nth-child(2) { animation-delay: 0.4s; }
+  .listening + .wave:nth-child(3) { animation-delay: 0.8s; }
+
+  @keyframes ripple {
+    0%   { transform: scale(0.9); opacity: 0.8; }
+    100% { transform: scale(1.8); opacity: 0; }
+  }
+
+  .status {
+    font-size: 1rem;
+    color: #a78bfa;
+    margin-bottom: 24px;
+    min-height: 24px;
+    text-align: center;
+  }
+
+  .chat {
+    width: 100%;
+    max-width: 620px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    padding: 16px;
+    max-height: 45vh;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+
+  .chat::-webkit-scrollbar { width: 6px; }
+  .chat::-webkit-scrollbar-thumb {
+    background: rgba(167, 139, 250, 0.4);
+    border-radius: 4px;
+  }
+
+  .msg {
+    padding: 10px 14px;
+    border-radius: 14px;
+    max-width: 85%;
+    line-height: 1.4;
+    font-size: 0.95rem;
+    animation: fadeIn 0.3s ease;
+  }
+
+  .msg.user {
+    align-self: flex-end;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    color: #fff;
+    border-bottom-right-radius: 4px;
+  }
+
+  .msg.bot {
+    align-self: flex-start;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom-left-radius: 4px;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .empty {
+    color: #6666a0;
+    text-align: center;
+    font-size: 0.9rem;
+    padding: 20px;
+  }
+
+  .hint {
+    font-size: 0.8rem;
+    color: #6666a0;
+    text-align: center;
+    max-width: 500px;
+    line-height: 1.6;
+  }
+
+  .clear-btn {
+    margin-top: 14px;
+    padding: 8px 18px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #a78bfa;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: background 0.2s;
+  }
+
+  .clear-btn:hover { background: rgba(167, 139, 250, 0.15); }
+</style>
+</head>
+<body>
+
+  <h1>🎙️ Голосовой Помощник</h1>
+  <p class="subtitle">Нажми на микрофон и говори</p>
+
+  <div class="mic-wrapper">
+    <button id="micBtn" class="mic-btn" aria-label="Говорить">🎤</button>
+    <span class="wave"></span>
+    <span class="wave"></span>
+    <span class="wave"></span>
+  </div>
+
+  <p id="status" class="status">Готов слушать</p>
+
+  <div id="chat" class="chat">
+    <div class="empty">Здесь появится наш диалог…</div>
+  </div>
+
+  <p class="hint">
+    Попробуй: «Который час», «Какое сегодня число», «Расскажи шутку»,
+    «Сколько будет 12 плюс 8», «Открой YouTube», «Привет»
+  </p>
+
+  <button class="clear-btn" onclick="clearChat()">Очистить историю</button>
+
+<script>
+const micBtn  = document.getElementById('micBtn');
+const statusEl = document.getElementById('status');
+const chatEl   = document.getElementById('chat');
+
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+if (!SpeechRecognition) {
+  statusEl.textContent = '❌ Ваш браузер не поддерживает распознавание речи. Используйте Chrome или Edge.';
+  micBtn.disabled = true;
+  micBtn.style.opacity = 0.4;
+}
+
+let recognition = null;
+let isListening = false;
+
+if (SpeechRecognition) {
+  recognition = new SpeechRecognition();
+  recognition.lang = 'ru-RU';
+  recognition.continuous = false;
+  recognition.interimResults = false;
+  recognition.maxAlternatives = 1;
+
+  recognition.onstart = () => {
+    isListening = true;
+    micBtn.classList.add('listening');
+    statusEl.textContent = '🎧 Слушаю…';
+  };
+
+  recognition.onresult = (event) => {
+    const text = event.results[0][0].transcript.trim();
+    if (text) {
+      addMessage(text, 'user');
+      handleCommand(text);
+    }
+  };
+
+  recognition.onerror = (event) => {
+    console.warn('Ошибка распознавания:', event.error);
+    if (event.error === 'no-speech') {
+      statusEl.textContent = '🤷 Ничего не услышал, попробуй снова';
+    } else if (event.error === 'not-allowed') {
+      statusEl.textContent = '🚫 Доступ к микрофону запрещён';
+    } else {
+      statusEl.textContent = '⚠️ Ошибка: ' + event.error;
+    }
+    stopListeningUI();
+  };
+
+  recognition.onend = () => { stopListeningUI(); };
+}
+
+function stopListeningUI() {
+  isListening = false;
+  micBtn.classList.remove('listening');
+  if (statusEl.textContent.startsWith('🎧')) {
+    statusEl.textContent = 'Готов слушать';
+  }
+}
+
+micBtn.addEventListener('click', () => {
+  if (!recognition) return;
+  if (isListening) { recognition.stop(); return; }
+  try { recognition.start(); } catch (e) {}
+});
+
+function speak(text) {
+  if (!window.speechSynthesis) return;
+  speechSynthesis.cancel();
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.lang = 'ru-RU';
+  utter.rate = 1;
+  utter.pitch = 1;
+  const voices = speechSynthesis.getVoices();
+  const ruVoice = voices.find(v => v.lang.startsWith('ru'));
+  if (ruVoice) utter.voice = ruVoice;
+  speechSynthesis.speak(utter);
+}
+
+if (window.speechSynthesis) {
+  speechSynthesis.onvoiceschanged = () => {};
+}
+
+function addMessage(text, sender) {
+  const empty = chatEl.querySelector('.empty');
+  if (empty) empty.remove();
+  const div = document.createElement('div');
+  div.className = 'msg ' + sender;
+  div.textContent = text;
+  chatEl.appendChild(div);
+  chatEl.scrollTop = chatEl.scrollHeight;
+}
+
+function clearChat() {
+  chatEl.innerHTML = '<div class="empty">Здесь появится наш диалог…</div>';
+}
+
+function respond(text) {
+  addMessage(text, 'bot');
+  speak(text);
+}
+
+function handleCommand(raw) {
+  const text = raw.toLowerCase();
+  statusEl.textContent = '🤔 Думаю…';
+
+  if (/\b(привет|здравствуй|хай|доброе утро|добрый день|добрый вечер)\b/.test(text)) {
+    const h = new Date().getHours();
+    let greet = 'Привет!';
+    if (h >= 5 && h < 12)  greet = 'Доброе утро!';
+    else if (h >= 12 && h < 18) greet = 'Добрый день!';
+    else if (h >= 18 && h < 23) greet = 'Добрый вечер!';
+    else greet = 'Доброй ночи!';
+    return respond(greet + ' Чем могу помочь?');
+  }
+
+  if (/\b(пока|до свидания|прощай|до встречи)\b/.test(text)) {
+    return respond('До встречи! Хорошего дня 👋');
+  }
+
+  if (/(котор\w* час|сколько время|текущее время|время)/.test(text) && !/сколько будет/.test(text)) {
+    const now = new Date();
+    const h = now.getHours().toString().padStart(2, '0');
+    const m = now.getMinutes().toString().padStart(2, '0');
+    return respond(`Сейчас ${h}:${m}`);
+  }
+
+  if (/(какое.*число|какая.*дата|сегодняшняя дата|какой день)/.test(text)) {
+    const days = ['воскресенье','понедельник','вторник','среда','четверг','пятница','суббота'];
+    const months = ['января','февраля','марта','апреля','мая','июня',
+                    'июля','августа','сентября','октября','ноября','декабря'];
+    const now = new Date();
+    return respond(`Сегодня ${days[now.getDay()]}, ${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()} года`);
+  }
+
+  const mathMatch = text.match(
+    /(?:сколько будет|посчитай|вычисли)\s*(-?\d+(?:[.,]\d+)?)\s*(плюс|минус|умножить на|умножить|разделить на|делить на|\+|-|\*|\/|x)\s*(-?\d+(?:[.,]\d+)?)/i
+  );
+  if (mathMatch) {
+    const a = parseFloat(mathMatch[1].replace(',', '.'));
+    const b = parseFloat(mathMatch[3].replace(',', '.'));
+    const op = mathMatch[2].toLowerCase();
+    let res, label;
+    if (op.includes('плюс') || op === '+') { res = a + b; label = 'плюс'; }
+    else if (op.includes('минус') || op === '-') { res = a - b; label = 'минус'; }
+    else if (op.includes('умнож') || op === '*' || op === 'x') { res = a * b; label = 'умножить на'; }
+    else if (op.includes('раздел') || op.includes('дел') || op === '/') {
+      if (b === 0) return respond('На ноль делить нельзя 🙂');
+      res = a / b; label = 'разделить на';
+    }
+    res = Math.round(res * 1000) / 1000;
+    return respond(`${a} ${label} ${b} равно ${res}`);
+  }
+
+  if (/(шутк|анекдот|пошути|развесели)/.test(text)) {
+    const jokes = [
+      'Программист ставит на ночь два стакана: один с водой, если захочет пить, и один пустой — если не захочет.',
+      'Почему программисты путают Хэллоуин и Рождество? Потому что Oct 31 = Dec 25.',
+      'Оптимист верит, что стакан наполовину полон. Пессимист — что наполовину пуст. Программист — что стакан в два раза больше, чем нужно.',
+      '— Как называется человек, который всё время молчит? — Программист, у которого всё работает.',
+      'Заходит улитка в бар и просит пиво. Бармен: — Вам как? — Мне не срочно.'
+    ];
+    return respond(jokes[Math.floor(Math.random() * jokes.length)]);
+  }
+
+  if (/(как дела|как ты|как настроение)/.test(text)) {
+    const replies = [
+      'У меня всё отлично! А у тебя как?',
+      'Работаю в штатном режиме. Спасибо, что спросил!',
+      'Бодра и готова помогать! 🚀'
+    ];
+    return respond(replies[Math.floor(Math.random() * replies.length)]);
+  }
+
+  if (/(кто ты|как тебя зовут|твоё имя|твое имя)/.test(text)) {
+    return respond('Я твой голосовой помощник. Умею говорить время, рассказывать шутки, считать и открывать сайты.');
+  }
+
+  if (/(спасибо|благодарю)/.test(text)) {
+    return respond('Всегда пожалуйста! 😊');
+  }
+
+  const sites = {
+    'youtube':   { url: 'https://youtube.com',   name: 'YouTube'   },
+    'ютуб':      { url: 'https://youtube.com',   name: 'YouTube'   },
+    'google':    { url: 'https://google.com',    name: 'Google'    },
+    'гугл':      { url: 'https://google.com',    name: 'Google'    },
+    'вконтакте': { url: 'https://vk.com',        name: 'ВКонтакте' },
+    'vk':        { url: 'https://vk.com',        name: 'ВКонтакте' },
+    'телеграм':  { url: 'https://web.telegram.org', name: 'Telegram' },
+    'telegram':  { url: 'https://web.telegram.org', name: 'Telegram' },
+    'wikipedia': { url: 'https://ru.wikipedia.org', name: 'Википедию' },
+    'википедию': { url: 'https://ru.wikipedia.org', name: 'Википедию' },
+    'яндекс':    { url: 'https://yandex.ru',     name: 'Яндекс'    },
+    'yandex':    { url: 'https://yandex.ru',     name: 'Яндекс'    }
+  };
+  if (/(открой|запусти|перейди)/.test(text)) {
+    for (const key in sites) {
+      if (text.includes(key)) {
+        window.open(sites[key].url, '_blank');
+        return respond('Открываю ' + sites[key].name);
+      }
+    }
+  }
+
+  if (/(погода|температура на улице)/.test(text)) {
+    return respond('К сожалению, у меня нет доступа к данным о погоде. Но я могу открыть для тебя Яндекс — просто скажи «открой Яндекс».');
+  }
+
+  respond('Извини, я не понял запрос. Попробуй спросить: «который час», «расскажи шутку» или «сколько будет 5 плюс 3».');
+}
+
+window.addEventListener('load', () => {
+  setTimeout(() => {
+    addMessage('Привет! Я твой голосовой помощник. Нажми на микрофон и скажи что-нибудь 🎙️', 'bot');
+  }, 300);
+});
+</script>
+</body>
+  </html>
